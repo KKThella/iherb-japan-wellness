@@ -317,8 +317,8 @@ Return 4 recs: {"recs":[{"id":"catalog-id","matchScore":88,"reason":"1 sentence"
           </div>
         </div>
 
-        {/* API key */}
-        <div className="px-4 py-3 border-t border-green-100">
+        {/* API key — hidden on Netlify (proxy handles it server-side) */}
+        {!USE_PROXY && <div className="px-4 py-3 border-t border-green-100">
           {apiKey && !keyOpen ? (
             <div className="bg-primary-light rounded-xl px-3 py-2 flex items-center justify-between">
               <span className="text-xs font-bold text-primary">✓ AI key active</span>
@@ -339,7 +339,7 @@ Return 4 recs: {"recs":[{"id":"catalog-id","matchScore":88,"reason":"1 sentence"
               {!apiKey && <p className="text-xs text-amber-600 text-center mt-1.5">⚠ Demo mode</p>}
             </div>
           )}
-        </div>
+        </div>}
       </aside>
     );
   }
@@ -1323,7 +1323,7 @@ Return 4 recs: {"recs":[{"id":"catalog-id","matchScore":88,"reason":"1 sentence"
   //  APP SHELL
   // ═══════════════════════════════════════════════════════════════
   function AppShell() {
-    const [apiKey,    setApiKey]    = useState("");
+    const [apiKey,    setApiKey]    = useState(USE_PROXY ? "proxy" : "");
     const [bilingual, setBilingual] = useState(true);
     const [onboardingGoals, setOGoals] = useState([]);
     const [shopList,  setShopList]  = useState([]);
