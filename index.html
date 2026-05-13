@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iHerb Japan — Personalized Wellness Concierge</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Nunito:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+
+  <!-- React 18 -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel standalone -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#438F4D',
+            'primary-dark': '#2E6B36',
+            'primary-light': '#E8F5EA',
+            bg: '#FDF8F5',
+            surface: '#FFFFFF',
+            'text-main': '#2C4C3B',
+            muted: '#97A89E',
+            accent: '#F47B62',
+          },
+          fontFamily: {
+            heading: ['"Zen Maru Gothic"', 'sans-serif'],
+            body: ['Nunito', 'sans-serif'],
+            display: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          boxShadow: {
+            soft: '0 12px 32px rgba(44,76,59,0.10)',
+            card: '0 4px 16px rgba(44,76,59,0.06)',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #FDF8F5;
+      font-family: 'Nunito', sans-serif;
+      color: #2C4C3B;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeInUp   { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeInCheck{ from { opacity:0; transform:scale(.5); }        to { opacity:1; transform:scale(1); } }
+    @keyframes pulse-ring { 0% { transform:scale(.85); opacity:.9; } 100% { transform:scale(1.9); opacity:0; } }
+    @keyframes spin        { to { transform:rotate(360deg); } }
+    @keyframes slideInL   { from { opacity:0; transform:translateX(-12px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes slideInR   { from { opacity:0; transform:translateX(12px); }  to { opacity:1; transform:translateX(0); } }
+    @keyframes dotBounce  { 0%,80%,100%{ transform:translateY(0); opacity:.4; } 40%{ transform:translateY(-6px); opacity:1; } }
+
+    .anim-fadeInUp   { animation: fadeInUp .45s ease both; }
+    .anim-check      { animation: fadeInCheck .35s cubic-bezier(.175,.885,.32,1.275) both; }
+    .anim-slideInL   { animation: slideInL .3s ease both; }
+    .anim-slideInR   { animation: slideInR .3s ease both; }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #c8d8cc; border-radius: 2px; }
+
+    /* Material icons fill toggle */
+    .icon-filled { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .material-symbols-outlined { line-height: 1; vertical-align: middle; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block; width:16px; height:16px;
+      border: 2px solid rgba(255,255,255,.35);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+    .spinner-green {
+      display: inline-block; width:16px; height:16px;
+      border: 2px solid rgba(67,143,77,.25);
+      border-top-color: #438F4D;
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+
+    /* Typing dots */
+    .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#97A89E; animation: dotBounce 1.3s ease infinite; }
+    .dot:nth-child(2){ animation-delay:.2s; }
+    .dot:nth-child(3){ animation-delay:.4s; }
+
+    /* Match-score ring: rotate so arc starts at top */
+    .score-ring { transform: rotate(-90deg); transform-origin: center; }
+
+    /* Goal card hover lift */
+    .goal-card { transition: transform .15s ease, box-shadow .15s ease; }
+    .goal-card:hover { transform: translateY(-2px); }
+
+    input:focus, textarea:focus { outline: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+<script type="text/babel">
+  const { useState, useEffect, useRef, useContext, createContext, Children, cloneElement } = React;
+
+  // ── Minimal custom router (no external dep needed) ──────────────
+  const RouterCtx = createContext(null);
+
+  function MemoryRouter({ children }) {
+    const [loc, setLoc] = useState({ pathname: "/", state: null });
+    const navigate = (path, opts = {}) => setLoc({ pathname: path, state: opts.state ?? null });
+    return (
+      <RouterCtx.Provider value={{ loc, navigate }}>
+        {children}
+      </RouterCtx.Provider>
+    );
+  }
+
+  function useNavigate() { return useContext(RouterCtx).navigate; }
+  function useLocation() { return useContext(RouterCtx).loc; }
+
+  function Routes({ children }) {
+    const { loc } = useContext(RouterCtx);
+    const arr = Children.toArray(children);
+    const match = arr.find(c => c.props.path === loc.pathname) || arr.find(c => c.props.path === "*");
+    return match ? match.props.element : null;
+  }
+
+  function Route() { return null; } // Routes handles rendering directly
+  // ────────────────────────────────────────────────────────────────
+
+  // ═══════════════════════════════════════════════════════════════
+  //  CONSTANTS
+  // ═══════════════════════════════════════════════════════════════
+  const MODEL = "claude-haiku-4-5-20251001";
+  const API_URL = "https://api.anthropic.com/v1/messages";
+
+  const JAPAN_CATALOG = [
+    { id:"gold-c",        brand:"California Gold Nutrition", name:"Gold C, Vitamin C 1,000 mg",       price:"¥750",   icon:"brightness_high",       goals:["immunity","skin","energy"],      tag:"✨ Antioxidant / 抗酸化",       bg:"#FFF3E0" },
+    { id:"collagen-up",   brand:"California Gold Nutrition", name:"CollagenUP Marine Collagen",        price:"¥2,890", icon:"spa",                    goals:["skin","beauty","joints"],        tag:"🌟 Skin & Beauty / 美肌",        bg:"#FCE4EC" },
+    { id:"collagen-vital",brand:"Vital Proteins",            name:"Collagen Peptides, Unflavored",     price:"¥4,200", icon:"face_retouching_natural", goals:["skin","joints","hair"],          tag:"🌟 Skin Structure / ハリ・潤い",  bg:"#F3E5F5" },
+    { id:"b-complex",     brand:"21st Century",              name:"B-Complex Plus Vitamin C",          price:"¥950",   icon:"bolt",                   goals:["energy","stress","focus"],       tag:"⚡ Energy / 活力の基盤",          bg:"#FFF8E1" },
+    { id:"magnesium",     brand:"Doctor's Best",             name:"High Absorption Magnesium",         price:"¥1,850", icon:"nightlight",             goals:["sleep","stress","recovery"],     tag:"😴 Sleep & Calm / 安眠",         bg:"#E8EAF6" },
+    { id:"probiotic",     brand:"NOW Foods",                 name:"Probiotic-10, 25 Billion",          price:"¥2,450", icon:"eco",                    goals:["digestion","immunity","skin"],   tag:"🌿 Gut Health / 腸活",           bg:"#E8F5E9" },
+    { id:"melatonin",     brand:"Natrol",                    name:"Melatonin Fast Dissolve, 3mg",      price:"¥850",   icon:"bedtime",                goals:["sleep"],                        tag:"😴 Deep Sleep / 快眠",           bg:"#E3F2FD" },
+    { id:"ashwagandha",   brand:"NOW Foods",                 name:"Ashwagandha Extract, 450mg",        price:"¥2,100", icon:"self_improvement",       goals:["stress","energy","focus"],       tag:"🧘 Stress Relief / ストレス緩和",  bg:"#F3E5F5" },
+    { id:"vitamin-d3",    brand:"Country Life",              name:"Vitamin D3, 2000 IU",               price:"¥1,200", icon:"wb_sunny",               goals:["immunity","energy","bone"],      tag:"☀️ Daily Foundation / 免疫",      bg:"#FFFDE7" },
+    { id:"omega3",        brand:"California Gold Nutrition", name:"Omega-3 Premium Fish Oil",          price:"¥1,980", icon:"water",                  goals:["focus","heart","joints"],        tag:"🐟 Heart & Brain / 心臓・脳",     bg:"#E1F5FE" },
+    { id:"biotin",        brand:"Jarrow Formulas",           name:"Biotin 5000mcg",                    price:"¥1,350", icon:"face",                   goals:["hair","skin","energy"],          tag:"💇 Hair & Nails / 美髪",         bg:"#FCE4EC" },
+    { id:"zinc",          brand:"Nature's Way",              name:"Zinc Chelate, 30mg",                price:"¥980",   icon:"shield",                 goals:["immunity","skin","focus"],       tag:"🛡️ Immunity / 免疫強化",         bg:"#E8F5E9" },
+  ];
+
+  const GOAL_OPTIONS = [
+    { id:"immunity",   icon:"shield",                 label:"Immunity",     ja:"免疫力アップ" },
+    { id:"skin",       icon:"face_retouching_natural",label:"Skin & Beauty",ja:"美肌・美容" },
+    { id:"energy",     icon:"bolt",                   label:"Energy",       ja:"エネルギー" },
+    { id:"sleep",      icon:"bedtime",                label:"Sleep",        ja:"睡眠改善" },
+    { id:"stress",     icon:"self_improvement",       label:"Stress Relief",ja:"ストレス緩和" },
+    { id:"digestion",  icon:"eco",                    label:"Gut Health",   ja:"腸活" },
+    { id:"focus",      icon:"psychology",             label:"Focus",        ja:"集中力" },
+    { id:"hair",       icon:"face",                   label:"Hair & Nails", ja:"美髪・爪" },
+  ];
+
+  const DIET_OPTIONS = [
+    { id:"no-restriction", label:"No restrictions", ja:"制限なし" },
+    { id:"vegetarian",     label:"Vegetarian",      ja:"ベジタリアン" },
+    { id:"vegan",          label:"Vegan",           ja:"ヴィーガン" },
+    { id:"halal",          label:"Halal",           ja:"ハラール" },
+  ];
+
+  const STRATEGY_LABEL = {
+    "content-based": "Content-Based Filtering",
+    "collaborative":  "Collaborative Filtering",
+    "hybrid":         "Hybrid AI",
+  };
+
+  const CATALOG_TEXT = JAPAN_CATALOG.map(p =>
+    `${p.id}: ${p.brand} ${p.name} (${p.price}) — best for: ${p.goals.join(", ")}`
+  ).join("\n");
+
+  // ═══════════════════════════════════════════════════════════════
+  //  API LAYER
+  // ═══════════════════════════════════════════════════════════════
+  async function callClaude(apiKey, system, messages, maxTokens = 900) {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${res.status}`);
+    }
+    const data = await res.json();
+    return data.content[0].text;
+  }
+
+  async function fetchJapanStarterSet(apiKey, goals, diet) {
+    const system = `You are an iHerb Japan personalization engine. A new Japanese customer shared their health goals and dietary needs. Pick exactly 3 products from the catalog below. Return ONLY valid JSON with no markdown fences.
+
+CATALOG:
+${CATALOG_TEXT}
+
+RETURN FORMAT:
+{
+  "picks": ["id1","id2","id3"],
+  "reasons": ["Why product 1 fits in 1 sentence","...","..."],
+  "strategies": ["content-based","collaborative","hybrid"],
+  "match_scores": [95,88,82],
+  "synergy_en": "One sentence on how these 3 work together as a daily stack.",
+  "synergy_ja": "日本語で1文：この3製品がデイリースタックとしてどう機能するか。"
+}
+
+Rules:
+- Only use IDs from the catalog above
+- Respect dietary restrictions (vegan/vegetarian: no fish oil; halal: no pork gelatin)
+- match_scores range 72–98
+- strategies must be one of: content-based, collaborative, hybrid`;
+
+    const user = `Health goals: ${goals.join(", ")}. Dietary need: ${diet}. Pick the best 3 products.`;
+    const raw = await callClaude(apiKey, system, [{ role:"user", content:user }], 600);
+    return JSON.parse(raw.replace(/```json|```/g, "").trim());
+  }
+
+  async function fetchConversationalReply(apiKey, messages) {
+    const system = `You are a warm, bilingual wellness shopping guide for iHerb Japan. Help customers discover the right supplements through natural conversation. Use English primarily; add Japanese phrases naturally when appropriate.
+
+CONVERSATION RULES:
+- Ask ONE focused clarifying question per turn
+- After 2-3 exchanges (goal + health context + dietary needs known), surface 3 product recommendations
+- Personalize every recommendation to exactly what this user told you
+- Never diagnose, treat, or prescribe
+- Be warm, specific, concise (3-5 sentences per reply)
+
+CATALOG (use IDs from here when recommending):
+${CATALOG_TEXT}
+
+RESPONSE FORMAT — valid JSON only, no markdown fences:
+{
+  "reply": "your conversational message here",
+  "recs": null,
+  "followUp": "a natural next question or null"
+}
+
+When ready to recommend, replace null with:
+"recs": [
+  { "id": "product-id-from-catalog", "matchScore": 87, "reason": "1 sentence tied to what user said", "tag": "short label" }
+]`;
+
+    const raw = await callClaude(apiKey, system, messages, 800);
+    const clean = raw.replace(/```json|```/g, "").trim();
+    try { return JSON.parse(clean); }
+    catch { return { reply: raw, recs: null, followUp: null }; }
+  }
+
+  async function fetchProfileRecs(apiKey, profile) {
+    const system = `You are an iHerb Japan supplement recommendation engine. Return ONLY valid JSON with no markdown.
+
+CATALOG:
+${CATALOG_TEXT}
+
+Return exactly 4 product recommendations:
+{
+  "recs": [
+    { "id":"product-id", "matchScore":88, "reason":"1 sentence personalized to this user", "strategy":"content-based|collaborative|hybrid", "confidence":85 }
+  ]
+}`;
+    const user = `User: age ${profile.age || "not given"}, goals: ${profile.goals || "general wellness"}, diet: ${profile.diet || "no restrictions"}, notes: ${profile.notes || "none"}. Recommend 4 products from the catalog.`;
+    const raw = await callClaude(apiKey, system, [{ role:"user", content:user }], 700);
+    return JSON.parse(raw.replace(/```json|```/g, "").trim());
+  }
+
+  async function fetchAskAnything(apiKey, query, context) {
+    const system = `You are a knowledgeable iHerb Japan wellness advisor. Answer the user's supplement question concisely (2-4 sentences). Reference products from iHerb when relevant. Never diagnose or prescribe. Context about this user: ${context || "general wellness inquiry"}.`;
+    return await callClaude(apiKey, system, [{ role:"user", content:query }], 350);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  API KEY BANNER
+  // ═══════════════════════════════════════════════════════════════
+  function ApiKeyBanner({ apiKey, onSave }) {
+    const [draft, setDraft] = useState(apiKey || "");
+    const [open, setOpen] = useState(!apiKey);
+
+    if (!open && apiKey) return (
+      <div className="fixed top-0 inset-x-0 z-50 bg-primary-light border-b border-green-200 px-4 py-1.5 flex items-center justify-between">
+        <span className="text-xs text-primary font-semibold">✓ API key active — AI features enabled</span>
+        <button onClick={() => setOpen(true)} className="text-xs text-muted underline hover:text-primary">Change</button>
+      </div>
+    );
+
+    if (!open) return (
+      <div className="fixed top-0 inset-x-0 z-50 bg-amber-50 border-b border-amber-200 px-4 py-1.5 flex items-center gap-2">
+        <span className="text-xs text-amber-700">⚠ Demo mode — add API key for live AI</span>
+        <button onClick={() => setOpen(true)} className="text-xs text-accent font-bold underline">Add key</button>
+      </div>
+    );
+
+    return (
+      <div className="fixed top-0 inset-x-0 z-50 bg-white shadow-soft border-b border-green-100 px-4 py-2.5">
+        <div className="max-w-lg mx-auto flex items-center gap-2">
+          <span className="text-sm font-bold text-text-main shrink-0">🔑 Anthropic Key</span>
+          <input
+            type="password"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && draft) { onSave(draft); setOpen(false); } }}
+            placeholder="sk-ant-..."
+            className="flex-1 border border-green-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:border-primary transition-colors"
+          />
+          <button
+            onClick={() => { if (draft) { onSave(draft); setOpen(false); } }}
+            className="bg-primary text-white text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-primary-dark transition-colors shrink-0"
+          >Save</button>
+          {apiKey && <button onClick={() => setOpen(false)} className="text-muted text-xl leading-none px-1">×</button>}
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  TOP NAV
+  // ═══════════════════════════════════════════════════════════════
+  function TopNav({ activeMode, onMode }) {
+    const tabs = [
+      { id:"onboarding", icon:"torii_gate",  en:"Japan Onboarding", ja:"ようこそ" },
+      { id:"chat",       icon:"forum",        en:"Chat Shop",        ja:"チャット" },
+      { id:"profile",    icon:"manage_accounts", en:"My Profile",   ja:"プロフィール" },
+    ];
+    return (
+      <nav className="bg-white border-b border-green-100 shadow-card sticky top-10 z-40">
+        <div className="max-w-lg mx-auto flex items-center justify-between px-4">
+          <div className="flex items-center gap-2 py-3">
+            <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center shadow-card">
+              <span className="text-white text-xs font-black">iH</span>
+            </div>
+            <span className="font-display font-bold text-text-main text-sm">iHerb Japan</span>
+            <span className="hidden sm:inline text-xs text-muted bg-green-50 px-2 py-0.5 rounded-full border border-green-100">AI Concierge</span>
+          </div>
+          <div className="flex gap-1">
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => onMode(t.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeMode === t.id
+                    ? "bg-primary text-white"
+                    : "text-muted hover:text-text-main hover:bg-green-50"
+                }`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize:"16px" }}>{t.icon}</span>
+                <span className="hidden sm:inline">{t.en}</span>
+                <span className="sm:hidden font-heading">{t.ja}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  SCREEN 1 — WELCOME
+  // ═══════════════════════════════════════════════════════════════
+  function WelcomeScreen() {
+    const navigate = useNavigate();
+    return (
+      <div className="min-h-[calc(100vh-88px)] bg-bg flex flex-col items-center justify-center px-6 py-12">
+        <div className="max-w-xs w-full text-center anim-fadeInUp">
+
+          {/* Pulsing orb */}
+          <div className="relative mx-auto w-28 h-28 mb-7 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-primary/10" style={{ animation:"pulse-ring 2s ease-out infinite" }} />
+            <div className="absolute inset-3 rounded-full bg-primary/10" style={{ animation:"pulse-ring 2s ease-out infinite", animationDelay:".5s" }} />
+            <div className="relative w-20 h-20 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center shadow-soft">
+              <span className="material-symbols-outlined icon-filled text-white" style={{ fontSize:"38px" }}>spa</span>
+            </div>
+          </div>
+
+          <h1 className="font-display font-bold text-3xl text-text-main mb-1">Welcome to iHerb</h1>
+          <p className="font-heading text-xl text-primary font-medium mb-1">ようこそ、iHerbへ</p>
+          <p className="text-sm text-muted mb-8 leading-relaxed">
+            AI-powered wellness, personalized for you.<br />
+            <span className="font-heading text-xs">あなたのウェルネスをAIがパーソナライズ</span>
+          </p>
+
+          {/* Value props */}
+          <div className="grid grid-cols-3 gap-3 mb-8">
+            {[
+              { icon:"psychology",   en:"AI Picks",      ja:"AI選定" },
+              { icon:"language",     en:"Bilingual",     ja:"日英対応" },
+              { icon:"verified",     en:"100M+ Trust",   ja:"信頼実績" },
+            ].map((p, i) => (
+              <div key={i} className="bg-white rounded-2xl p-3 shadow-card text-center">
+                <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"26px" }}>{p.icon}</span>
+                <p className="text-xs font-bold text-text-main mt-1">{p.en}</p>
+                <p className="font-heading text-xs text-muted">{p.ja}</p>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => navigate("/intake")}
+            className="w-full bg-primary text-white font-bold py-4 rounded-3xl text-base shadow-soft hover:bg-primary-dark active:scale-95 transition-all mb-3"
+          >
+            Get My Wellness Plan
+            <span className="block font-heading text-sm font-medium opacity-75 mt-0.5">私のウェルネスプランを作成</span>
+          </button>
+
+          <p className="text-xs text-muted">
+            60 seconds · No account needed<br />
+            <span className="font-heading">60秒で完了 · アカウント不要</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  SCREEN 2 — INTAKE
+  // ═══════════════════════════════════════════════════════════════
+  function IntakeScreen() {
+    const navigate = useNavigate();
+    const [step, setStep] = useState(1);
+    const [goals, setGoals] = useState([]);
+    const [diet, setDiet] = useState("no-restriction");
+
+    const toggleGoal = id =>
+      setGoals(prev => prev.includes(id) ? prev.filter(g => g !== id) : prev.length < 3 ? [...prev, id] : prev);
+
+    const next = () => {
+      if (step === 1 && goals.length > 0) setStep(2);
+      else if (step === 2) navigate("/thinking", { state: { goals, diet } });
+    };
+
+    return (
+      <div className="min-h-[calc(100vh-88px)] bg-bg px-5 py-7">
+        <div className="max-w-sm mx-auto">
+
+          {/* Progress row */}
+          <div className="flex items-center gap-3 mb-6">
+            <button
+              onClick={() => step === 1 ? navigate("/") : setStep(1)}
+              className="text-muted hover:text-text-main transition-colors"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize:"22px" }}>arrow_back</span>
+            </button>
+            <div className="flex-1 flex gap-1.5">
+              {[1,2].map(s => (
+                <div key={s} className={`flex-1 h-1.5 rounded-full transition-all duration-500 ${s <= step ? "bg-primary" : "bg-green-100"}`} />
+              ))}
+            </div>
+            <span className="text-xs text-muted font-semibold">{step}/2</span>
+          </div>
+
+          {step === 1 ? (
+            <div className="anim-fadeInUp">
+              <h2 className="font-display font-bold text-2xl text-text-main mb-0.5">What are your goals?</h2>
+              <p className="font-heading text-sm text-muted mb-5">健康目標を選んでください（最大3つ）</p>
+
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                {GOAL_OPTIONS.map((g, i) => {
+                  const sel = goals.includes(g.id);
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => toggleGoal(g.id)}
+                      className={`goal-card relative p-4 rounded-2xl text-left border-2 ${
+                        sel ? "border-primary bg-primary-light shadow-soft" : "border-transparent bg-white shadow-card hover:border-green-200"
+                      }`}
+                      style={{ animationDelay: `${i * 0.04}s` }}
+                    >
+                      <span className={`material-symbols-outlined ${sel ? "icon-filled text-primary" : "text-muted"}`} style={{ fontSize:"26px" }}>{g.icon}</span>
+                      <p className={`font-bold text-sm mt-1 ${sel ? "text-primary" : "text-text-main"}`}>{g.label}</p>
+                      <p className="font-heading text-xs text-muted">{g.ja}</p>
+                      {sel && (
+                        <div className="absolute top-2 right-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center anim-check">
+                          <span className="material-symbols-outlined icon-filled text-white" style={{ fontSize:"13px" }}>check</span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-xs text-center text-muted mb-4">
+                {goals.length}/3 selected · {3 - goals.length > 0 ? `${3-goals.length} more allowed` : "max reached"}
+              </p>
+            </div>
+          ) : (
+            <div className="anim-fadeInUp">
+              <h2 className="font-display font-bold text-2xl text-text-main mb-0.5">Any dietary needs?</h2>
+              <p className="font-heading text-sm text-muted mb-5">食事制限はありますか？</p>
+
+              <div className="flex flex-col gap-3 mb-6">
+                {DIET_OPTIONS.map(d => (
+                  <button
+                    key={d.id}
+                    onClick={() => setDiet(d.id)}
+                    className={`p-4 rounded-2xl text-left border-2 flex items-center justify-between transition-all ${
+                      diet === d.id ? "border-primary bg-primary-light" : "border-transparent bg-white shadow-card hover:border-green-200"
+                    }`}
+                  >
+                    <div>
+                      <p className={`font-bold ${diet === d.id ? "text-primary" : "text-text-main"}`}>{d.label}</p>
+                      <p className="font-heading text-xs text-muted">{d.ja}</p>
+                    </div>
+                    {diet === d.id && (
+                      <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"22px" }}>check_circle</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={next}
+            disabled={step === 1 && goals.length === 0}
+            className={`w-full py-4 rounded-3xl font-bold text-base transition-all active:scale-95 ${
+              step === 2 || goals.length > 0
+                ? "bg-primary text-white shadow-soft hover:bg-primary-dark"
+                : "bg-green-100 text-muted cursor-not-allowed"
+            }`}
+          >
+            {step === 1 ? "Next →" : "Build My Plan / プランを作成"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  SCREEN 3 — THINKING (real Claude call fires here)
+  // ═══════════════════════════════════════════════════════════════
+  function ThinkingScreen({ apiKey }) {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { goals = [], diet = "no-restriction" } = location.state || {};
+    const [step, setStep] = useState(0);
+    const [error, setError] = useState("");
+    const fired = useRef(false);
+
+    const STEPS = [
+      { en:"Analyzing your wellness goals...",           ja:"健康目標を分析中...",                  icon:"analytics" },
+      { en:"Matching Japan catalog to your needs...",   ja:"日本カタログから商品を照合中...",        icon:"inventory_2" },
+      { en:"Optimizing your personal stack...",          ja:"パーソナルスタックを最適化中...",        icon:"auto_awesome" },
+    ];
+
+    const MOCK = {
+      picks: ["collagen-up", "probiotic", "magnesium"],
+      reasons: [
+        "Marine collagen is Japan's #1 beauty supplement and directly targets your skin & beauty goal.",
+        "A 25-billion CFU probiotic supports gut health and improves nutrient absorption for better skin.",
+        "High-absorption magnesium calms the nervous system, improving sleep quality and stress recovery.",
+      ],
+      strategies: ["content-based", "collaborative", "hybrid"],
+      match_scores: [96, 91, 85],
+      synergy_en: "This trio works as a system: collagen rebuilds skin structure, probiotics maximize collagen absorption, and magnesium reduces cortisol so your skin can repair overnight.",
+      synergy_ja: "このトリオはシステムとして機能します：コラーゲンが肌の構造を再構築し、プロバイオティクスがその吸収を高め、マグネシウムがコルチゾールを下げて夜間の肌修復を促進します。",
+    };
+
+    useEffect(() => {
+      if (fired.current) return;
+      fired.current = true;
+
+      const run = async () => {
+        try {
+          setStep(0);
+          await new Promise(r => setTimeout(r, 900));
+          setStep(1);
+
+          let result;
+          if (!apiKey) {
+            await new Promise(r => setTimeout(r, 1400));
+            result = MOCK;
+          } else {
+            result = await fetchJapanStarterSet(apiKey, goals, diet);
+          }
+
+          setStep(2);
+          await new Promise(r => setTimeout(r, 700));
+          navigate("/results", { state: { result, goals, diet } });
+        } catch (e) {
+          setError(e.message || "Something went wrong. Check your API key.");
+        }
+      };
+
+      run();
+    }, []);
+
+    if (error) return (
+      <div className="min-h-[calc(100vh-88px)] flex flex-col items-center justify-center px-6 anim-fadeInUp">
+        <span className="material-symbols-outlined text-accent mb-3" style={{ fontSize:"52px" }}>error_outline</span>
+        <h2 className="font-display font-bold text-xl text-text-main mb-2">Something went wrong</h2>
+        <p className="text-sm text-muted text-center mb-6 max-w-xs">{error}</p>
+        <button onClick={() => navigate("/intake")} className="bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-soft hover:bg-primary-dark transition-all">
+          Try Again
+        </button>
+      </div>
+    );
+
+    return (
+      <div className="min-h-[calc(100vh-88px)] flex flex-col items-center justify-center px-6">
+        <div className="max-w-xs w-full">
+
+          {/* Pulsing orb */}
+          <div className="relative mx-auto w-28 h-28 mb-10 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-primary/10" style={{ animation:"pulse-ring 1.6s ease-out infinite" }} />
+            <div className="absolute inset-2 rounded-full bg-primary/08" style={{ animation:"pulse-ring 1.6s ease-out infinite", animationDelay:".4s" }} />
+            <div className="relative w-20 h-20 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center shadow-soft">
+              <span className="material-symbols-outlined icon-filled text-white" style={{ fontSize:"36px" }}>psychology</span>
+            </div>
+          </div>
+
+          {/* Steps */}
+          <div className="space-y-3 mb-8">
+            {STEPS.map((s, i) => {
+              const done   = i < step;
+              const active = i === step;
+              return (
+                <div key={i} className={`flex items-center gap-4 p-4 rounded-2xl transition-all duration-500 ${
+                  active ? "bg-white shadow-soft" : done ? "bg-primary-light" : "bg-green-50/60"
+                }`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all duration-400 ${
+                    done ? "bg-primary" : active ? "bg-primary/10" : "bg-green-100"
+                  }`}>
+                    {done
+                      ? <span className="material-symbols-outlined icon-filled text-white anim-check" style={{ fontSize:"20px" }}>check</span>
+                      : active
+                        ? <div style={{ width:16, height:16, border:"2px solid #438F4D", borderTopColor:"transparent", borderRadius:"50%", animation:"spin .8s linear infinite" }} />
+                        : <span className="material-symbols-outlined text-muted" style={{ fontSize:"20px" }}>{s.icon}</span>
+                    }
+                  </div>
+                  <div>
+                    <p className={`font-bold text-sm ${active ? "text-text-main" : done ? "text-primary" : "text-muted"}`}>{s.en}</p>
+                    <p className={`font-heading text-xs ${active ? "text-muted" : done ? "text-primary/60" : "text-muted/50"}`}>{s.ja}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-center text-xs text-muted font-heading">AIがあなたに最適な組み合わせを選んでいます...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  SCREEN 4 — RESULTS
+  // ═══════════════════════════════════════════════════════════════
+  function ResultsScreen({ apiKey }) {
+    const navigate = useNavigate();
+    const { state } = useLocation();
+    const { result, goals = [], diet = "" } = state || {};
+    const [askQ, setAskQ] = useState("");
+    const [askA, setAskA] = useState("");
+    const [askLoading, setAskLoading] = useState(false);
+
+    if (!result) return (
+      <div className="min-h-[calc(100vh-88px)] flex flex-col items-center justify-center gap-4 px-6">
+        <p className="text-muted text-sm">No results yet — complete the quiz first.</p>
+        <button onClick={() => navigate("/")} className="bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-soft">Start Quiz</button>
+      </div>
+    );
+
+    const products = result.picks.map((id, i) => {
+      const p = JAPAN_CATALOG.find(c => c.id === id);
+      if (!p) return null;
+      return { ...p, reason: result.reasons[i], strategy: result.strategies[i], matchScore: result.match_scores[i] };
+    }).filter(Boolean);
+
+    const handleAsk = async () => {
+      if (!askQ.trim()) return;
+      setAskLoading(true); setAskA("");
+      try {
+        const ctx = `User goals: ${goals.join(", ")}. Recommended stack: ${products.map(p=>p.name).join(", ")}.`;
+        const ans = apiKey
+          ? await fetchAskAnything(apiKey, askQ, ctx)
+          : "Please save your Anthropic API key (banner at top) to enable AI answers.";
+        setAskA(ans);
+      } catch { setAskA("Sorry — something went wrong. Please try again."); }
+      finally { setAskLoading(false); }
+    };
+
+    const QUICK = ["Can I take all 3 together?", "Best time to take?", "Any side effects?"];
+
+    return (
+      <div className="bg-bg pb-20">
+
+        {/* Hero banner */}
+        <div className="bg-gradient-to-br from-primary to-primary-dark px-5 pt-8 pb-14 text-white text-center">
+          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-card">
+            <span className="material-symbols-outlined icon-filled text-white" style={{ fontSize:"26px" }}>auto_awesome</span>
+          </div>
+          <h2 className="font-display font-bold text-2xl mb-0.5">Your Wellness Stack</h2>
+          <p className="font-heading text-sm opacity-80 mb-3">あなたのウェルネススタック</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {goals.map(g => {
+              const opt = GOAL_OPTIONS.find(o => o.id === g);
+              return opt ? <span key={g} className="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-heading">{opt.ja}</span> : null;
+            })}
+          </div>
+        </div>
+
+        <div className="max-w-sm mx-auto px-4 -mt-8 space-y-4">
+
+          {/* Product cards */}
+          {products.map((p, i) => (
+            <div key={p.id} className="bg-white rounded-3xl shadow-soft overflow-hidden anim-fadeInUp" style={{ animationDelay:`${i*.12}s` }}>
+              <div className="px-5 pt-5 pb-4">
+                <div className="flex items-start justify-between gap-3">
+                  {/* Left */}
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: p.bg }}>
+                      <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"24px" }}>{p.icon}</span>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted font-bold uppercase tracking-wide">{p.brand}</p>
+                      <p className="font-bold text-sm text-text-main leading-snug">{p.name}</p>
+                      <p className="text-primary font-bold text-base mt-0.5">{p.price}</p>
+                    </div>
+                  </div>
+                  {/* Match score ring */}
+                  <div className="shrink-0 flex flex-col items-center">
+                    <div className="relative w-14 h-14">
+                      <svg width="56" height="56" viewBox="0 0 56 56">
+                        <circle cx="28" cy="28" r="23" fill="none" stroke="#E8F5E9" strokeWidth="4" />
+                        <circle
+                          cx="28" cy="28" r="23" fill="none"
+                          stroke="#438F4D" strokeWidth="4"
+                          strokeDasharray={`${(p.matchScore/100)*144.5} 144.5`}
+                          strokeLinecap="round"
+                          className="score-ring"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-primary font-black text-sm leading-none">{p.matchScore}%</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted mt-0.5">match</p>
+                  </div>
+                </div>
+
+                <p className="text-sm text-muted leading-relaxed mt-3">{p.reason}</p>
+
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  <span className="bg-green-50 text-primary text-xs px-2.5 py-1 rounded-full font-semibold border border-green-100">{p.tag}</span>
+                  <span className="bg-blue-50 text-blue-600 text-xs px-2.5 py-1 rounded-full border border-blue-100">{STRATEGY_LABEL[p.strategy] || p.strategy}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Synergy note */}
+          <div className="bg-gradient-to-br from-primary-light to-green-100 rounded-3xl p-5 border border-green-200 anim-fadeInUp" style={{ animationDelay:".4s" }}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"20px" }}>hub</span>
+              <p className="font-bold text-primary text-sm">Stack Synergy / スタックの相乗効果</p>
+            </div>
+            <p className="text-sm text-text-main leading-relaxed">{result.synergy_en}</p>
+            <p className="font-heading text-xs text-text-main/65 mt-2 leading-relaxed">{result.synergy_ja}</p>
+          </div>
+
+          {/* Algorithm transparency */}
+          <div className="bg-white rounded-3xl p-5 shadow-card anim-fadeInUp" style={{ animationDelay:".5s" }}>
+            <p className="font-bold text-text-main text-sm flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-muted" style={{ fontSize:"18px" }}>info</span>
+              How AI selected these
+            </p>
+            {[
+              { color:"#60a5fa", label:"Content-Based",      desc:"Matched your stated goals to product attributes" },
+              { color:"#a78bfa", label:"Collaborative",       desc:"Users in Japan with similar goals bought these together" },
+              { color:"#438F4D", label:"Hybrid AI",           desc:"Weighted blend of both signals, Japan-market optimized" },
+            ].map(row => (
+              <div key={row.label} className="flex items-start gap-2 mb-1.5">
+                <span className="w-2.5 h-2.5 rounded-full mt-1 shrink-0" style={{ background: row.color }} />
+                <p className="text-xs text-muted"><strong className="text-text-main">{row.label}:</strong> {row.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Ask Anything */}
+          <div className="bg-white rounded-3xl p-5 shadow-card anim-fadeInUp" style={{ animationDelay:".55s" }}>
+            <p className="font-bold text-text-main text-sm flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"20px" }}>chat</span>
+              Ask Anything / 何でも聞く
+            </p>
+            <div className="flex gap-2 mb-2">
+              <input
+                value={askQ}
+                onChange={e => setAskQ(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAsk()}
+                placeholder="Ask about your stack... / 質問を入力..."
+                className="flex-1 border border-green-200 rounded-xl px-3 py-2.5 text-sm focus:border-primary transition-colors"
+              />
+              <button
+                onClick={handleAsk}
+                disabled={askLoading || !askQ.trim()}
+                className="bg-primary text-white px-4 py-2.5 rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
+              >
+                {askLoading ? <span className="spinner" /> : "Ask"}
+              </button>
+            </div>
+            {!askA && (
+              <div className="flex flex-wrap gap-2">
+                {QUICK.map(q => (
+                  <button key={q} onClick={() => setAskQ(q)} className="text-xs bg-green-50 text-primary px-3 py-1.5 rounded-full hover:bg-primary-light transition-colors border border-green-100">
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+            {askA && (
+              <div className="mt-2 p-3 bg-green-50 rounded-xl anim-fadeInUp border border-green-100">
+                <p className="text-sm text-text-main leading-relaxed">{askA}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-3 anim-fadeInUp" style={{ animationDelay:".6s" }}>
+            <button onClick={() => navigate("/")} className="flex-1 border-2 border-primary text-primary font-bold py-3.5 rounded-2xl text-sm hover:bg-primary-light transition-all">
+              Start Over
+            </button>
+            <button className="flex-1 bg-primary text-white font-bold py-3.5 rounded-2xl text-sm shadow-soft hover:bg-primary-dark active:scale-95 transition-all">
+              Add to Cart →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  MODE 2 — CONVERSATIONAL SHOPPING
+  // ═══════════════════════════════════════════════════════════════
+  function ConversationalMode({ apiKey }) {
+    const OPENER = {
+      role:"assistant",
+      parsed:{
+        reply:"こんにちは！Hi! I'm your iHerb Japan wellness guide 🌿\n\nI'll help you find the perfect supplements through conversation — no long forms needed. What health goal brings you here today?\n\n今日はどのような健康目標をお持ちですか？",
+        recs:null,
+      },
+    };
+
+    const MOCK_REPLIES = [
+      { reply:"That's a great goal! Stress and energy are two of the most common reasons our Japan customers shop with us. Quick question — do you have any dietary restrictions? (vegan, vegetarian, halal, or none?)", recs:null, followUp:null },
+      { reply:"Perfect, noted. And one more: are you currently taking any other supplements or medications?\n\nサプリメントやお薬は現在お飲みですか？", recs:null, followUp:null },
+      {
+        reply:"Based on what you've shared, I have 3 great picks for you! These are personalized to your stress + energy goals. どうぞ！",
+        recs:[
+          { id:"ashwagandha",  matchScore:93, reason:"Proven adaptogen that lowers cortisol — your stress levels will thank you.",            tag:"🧘 Stress" },
+          { id:"b-complex",    matchScore:87, reason:"B vitamins are the foundation of cellular energy — great for afternoon slumps.",         tag:"⚡ Energy" },
+          { id:"magnesium",    matchScore:82, reason:"Magnesium supports both stress regulation and sleep quality — a two-for-one benefit.",   tag:"😴 Recovery" },
+        ],
+        followUp:null,
+      },
+    ];
+
+    const [messages, setMessages] = useState([OPENER]);
+    const [input, setInput] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [shopList, setShopList] = useState([]);
+    const [added, setAdded] = useState({});
+    const [mockIdx, setMockIdx] = useState(0);
+    const bottomRef = useRef(null);
+
+    useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages, loading]);
+
+    const send = async () => {
+      const text = input.trim();
+      if (!text || loading) return;
+      setInput(""); setError("");
+      const userMsg = { role:"user", content:text };
+      const next = [...messages, userMsg];
+      setMessages(next);
+      setLoading(true);
+
+      try {
+        let parsed;
+        if (!apiKey) {
+          await new Promise(r => setTimeout(r, 1100));
+          parsed = MOCK_REPLIES[Math.min(mockIdx, MOCK_REPLIES.length-1)];
+          setMockIdx(i => i+1);
+        } else {
+          const apiMsgs = next
+            .filter(m => m.role === "user" || (m.role === "assistant" && m.parsed))
+            .map(m => ({ role:m.role, content: m.role === "assistant" ? m.parsed.reply : m.content }));
+          const firstUser = apiMsgs.findIndex(m => m.role === "user");
+          parsed = await fetchConversationalReply(apiKey, firstUser >= 0 ? apiMsgs.slice(firstUser) : apiMsgs);
+        }
+        setMessages(prev => [...prev, { role:"assistant", parsed }]);
+      } catch (e) {
+        setError("Something went wrong — please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const addToList = (rec) => {
+      if (added[rec.id]) return;
+      const product = JAPAN_CATALOG.find(p => p.id === rec.id) || {};
+      setShopList(prev => [...prev, { ...product, ...rec }]);
+      setAdded(prev => ({ ...prev, [rec.id]: true }));
+    };
+
+    const renderRecs = recs => (
+      <div className="mt-3 space-y-2">
+        <p className="text-xs font-bold text-primary">✦ Recommendations for you</p>
+        {recs.map((rec, i) => {
+          const p = JAPAN_CATALOG.find(x => x.id === rec.id);
+          const isAdded = added[rec.id];
+          return (
+            <div key={i} className="bg-primary-light rounded-2xl p-3 flex items-center gap-2">
+              {p && (
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background:p.bg }}>
+                  <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"18px" }}>{p.icon}</span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-text-main truncate">{p?.name || rec.id}</p>
+                <p className="text-xs text-muted leading-tight">{rec.reason}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-xs font-black text-primary">{rec.matchScore}%</span>
+                <button
+                  onClick={() => addToList(rec)}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all ${isAdded ? "bg-primary text-white" : "bg-white text-primary border border-primary hover:bg-primary-light"}`}
+                >
+                  {isAdded ? "✓" : "+"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+
+    return (
+      <div style={{ height:"calc(100vh - 88px)", display:"flex", flexDirection:"column" }}>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4 max-w-lg mx-auto w-full">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse anim-slideInR" : "anim-slideInL"}`}>
+              {msg.role === "assistant" && (
+                <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center shrink-0 mt-1 shadow-card">
+                  <span className="text-white text-xs font-black">iH</span>
+                </div>
+              )}
+              <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                msg.role === "assistant" ? "bg-white shadow-card text-text-main" : "bg-primary text-white"
+              }`}>
+                <p className="whitespace-pre-line">{msg.role === "assistant" ? msg.parsed.reply : msg.content}</p>
+                {msg.role === "assistant" && msg.parsed.recs && renderRecs(msg.parsed.recs)}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex gap-3 anim-slideInL">
+              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center shrink-0 mt-1 shadow-card">
+                <span className="text-white text-xs font-black">iH</span>
+              </div>
+              <div className="bg-white shadow-card rounded-2xl px-4 py-3 flex gap-1.5 items-center">
+                <span className="dot" /><span className="dot" /><span className="dot" />
+              </div>
+            </div>
+          )}
+
+          {error && <p className="text-center text-xs text-accent py-1">{error}</p>}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Shopping list strip */}
+        {shopList.length > 0 && (
+          <div className="bg-white border-t border-green-100 px-4 py-3 max-w-lg mx-auto w-full">
+            <p className="text-xs font-bold text-text-main mb-2">🛒 My List ({shopList.length})</p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {shopList.map((item, i) => (
+                <div key={i} className="shrink-0 flex items-center gap-1.5 bg-primary-light rounded-xl px-3 py-1.5 border border-green-200">
+                  <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"14px" }}>{item.icon}</span>
+                  <span className="text-xs font-bold text-primary">{item.name?.split(",")[0]}</span>
+                  <span className="text-xs text-primary/60">{item.price}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted mt-1 italic">In production: one-click add to iHerb cart or Autoship subscription</p>
+          </div>
+        )}
+
+        {/* Input row */}
+        <div className="bg-white border-t border-green-100 px-4 py-3 flex gap-2 max-w-lg mx-auto w-full">
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && send()}
+            placeholder="Type your message... / メッセージを入力..."
+            className="flex-1 border border-green-200 rounded-xl px-4 py-2.5 text-sm focus:border-primary transition-colors"
+          />
+          <button
+            onClick={send}
+            disabled={loading || !input.trim()}
+            className="bg-primary text-white px-4 py-2.5 rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
+          >
+            {loading ? <span className="spinner" /> : "→"}
+          </button>
+          <button
+            onClick={() => { setMessages([OPENER]); setInput(""); setShopList([]); setAdded({}); setMockIdx(0); }}
+            className="border border-green-200 text-muted px-3 py-2.5 rounded-xl text-sm hover:border-primary hover:text-primary transition-colors"
+            title="Start over"
+          >↺</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  MODE 3 — PROFILE + RECS + ASK ANYTHING
+  // ═══════════════════════════════════════════════════════════════
+  function ProfileMode({ apiKey, prefillGoals }) {
+    const [profile, setProfile] = useState({
+      age:"", goals: prefillGoals?.length ? [...prefillGoals] : [], diet:"no-restriction", notes:"",
+    });
+    const [recs, setRecs]       = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError]     = useState("");
+    const [strategy, setStrategy] = useState("hybrid");
+    const [askQ, setAskQ]       = useState("");
+    const [askA, setAskA]       = useState("");
+    const [askLoading, setAskLoading] = useState(false);
+
+    const MOCK_RECS = {
+      recs:[
+        { id:"vitamin-d3",  matchScore:94, reason:"Vitamin D3 is foundational for immunity and is commonly deficient in Japan due to limited sun exposure.", strategy:"content-based", confidence:91 },
+        { id:"omega3",      matchScore:89, reason:"Omega-3 fish oil supports cognitive focus — a top-ranked product among Japan users in your age group.",   strategy:"collaborative",  confidence:85 },
+        { id:"ashwagandha", matchScore:84, reason:"Ashwagandha reduces cortisol and supports sustained energy without jitteriness.",                          strategy:"hybrid",         confidence:80 },
+        { id:"gold-c",      matchScore:78, reason:"Vitamin C is a foundational antioxidant that complements your other picks and supports immune resilience.", strategy:"content-based", confidence:74 },
+      ],
+    };
+
+    const toggleGoal = id => setProfile(prev => ({
+      ...prev,
+      goals: prev.goals.includes(id) ? prev.goals.filter(g=>g!==id) : prev.goals.length < 4 ? [...prev.goals, id] : prev.goals,
+    }));
+
+    const getRecs = async () => {
+      if (!profile.goals.length) return;
+      setLoading(true); setError(""); setRecs(null);
+      try {
+        const result = apiKey
+          ? await fetchProfileRecs(apiKey, { ...profile, goals: profile.goals.join(", ") })
+          : (await new Promise(r=>setTimeout(r,1500)), MOCK_RECS);
+        setRecs(result);
+      } catch (e) { setError(e.message || "Failed to get recommendations."); }
+      finally { setLoading(false); }
+    };
+
+    const handleAsk = async () => {
+      if (!askQ.trim()) return;
+      setAskLoading(true); setAskA("");
+      try {
+        const ctx = recs
+          ? `User goals: ${profile.goals.join(", ")}. Recs: ${recs.recs.map(r=>JAPAN_CATALOG.find(p=>p.id===r.id)?.name||r.id).join(", ")}.`
+          : `User goals: ${profile.goals.join(", ")}.`;
+        const ans = apiKey
+          ? await fetchAskAnything(apiKey, askQ, ctx)
+          : "Please save your Anthropic API key to enable AI answers.";
+        setAskA(ans);
+      } catch { setAskA("Sorry — something went wrong. Please try again."); }
+      finally { setAskLoading(false); }
+    };
+
+    return (
+      <div className="overflow-y-auto pb-20" style={{ maxHeight:"calc(100vh - 88px)" }}>
+        <div className="max-w-sm mx-auto px-4 py-6">
+
+          {/* Profile Form */}
+          <div className="bg-white rounded-3xl shadow-card p-5 mb-4">
+            <h3 className="font-display font-bold text-text-main text-base flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"20px" }}>manage_accounts</span>
+              My Profile / プロフィール
+              {prefillGoals?.length > 0 && <span className="text-xs text-primary bg-primary-light px-2 py-0.5 rounded-full border border-green-200">Quiz pre-filled ✓</span>}
+            </h3>
+
+            {/* Age */}
+            <label className="block text-xs font-bold text-muted uppercase tracking-wide mb-1.5">Age / 年齢</label>
+            <input
+              type="number" value={profile.age} min="1" max="100"
+              onChange={e => setProfile(p => ({...p, age:e.target.value}))}
+              placeholder="e.g. 28"
+              className="border border-green-200 rounded-xl px-3 py-2 text-sm w-28 focus:border-primary transition-colors mb-4"
+            />
+
+            {/* Goals */}
+            <label className="block text-xs font-bold text-muted uppercase tracking-wide mb-2">Health Goals / 健康目標</label>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {GOAL_OPTIONS.map(g => {
+                const sel = profile.goals.includes(g.id);
+                return (
+                  <button key={g.id} onClick={() => toggleGoal(g.id)}
+                    className={`p-2 rounded-xl text-center transition-all ${sel ? "bg-primary-light border border-primary" : "bg-green-50 border border-transparent hover:border-green-200"}`}
+                  >
+                    <span className={`material-symbols-outlined ${sel?"icon-filled text-primary":"text-muted"}`} style={{ fontSize:"20px" }}>{g.icon}</span>
+                    <p className={`text-xs font-semibold mt-0.5 ${sel?"text-primary":"text-muted"}`}>{g.label}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Diet */}
+            <label className="block text-xs font-bold text-muted uppercase tracking-wide mb-2">Dietary Needs / 食事制限</label>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {DIET_OPTIONS.map(d => (
+                <button key={d.id} onClick={() => setProfile(p => ({...p, diet:d.id}))}
+                  className={`text-xs px-3 py-1.5 rounded-full font-bold transition-all ${profile.diet===d.id?"bg-primary text-white shadow-card":"bg-green-50 text-muted hover:bg-green-100"}`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Notes */}
+            <label className="block text-xs font-bold text-muted uppercase tracking-wide mb-1.5">Notes / メモ</label>
+            <input
+              value={profile.notes}
+              onChange={e => setProfile(p => ({...p, notes:e.target.value}))}
+              placeholder="Allergies, medications, health notes..."
+              className="border border-green-200 rounded-xl px-3 py-2 text-sm w-full focus:border-primary transition-colors mb-4"
+            />
+
+            {/* Strategy selector */}
+            <label className="block text-xs font-bold text-muted uppercase tracking-wide mb-2">Algorithm / アルゴリズム</label>
+            <div className="flex gap-2 mb-1.5">
+              {["hybrid","content-based","collaborative"].map(s => (
+                <button key={s} onClick={() => setStrategy(s)}
+                  className={`flex-1 text-xs py-2 rounded-xl font-bold transition-all ${strategy===s?"bg-primary text-white shadow-card":"bg-green-50 text-muted hover:bg-green-100"}`}
+                >
+                  {s==="hybrid" ? "Hybrid" : s==="content-based" ? "Content" : "Collab."}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted mb-5">
+              {strategy === "hybrid"         && "Weighted blend of your profile + similar user signals"}
+              {strategy === "content-based"  && "Matches purely on your stated goals & dietary needs"}
+              {strategy === "collaborative"  && "Based on what users with similar profiles purchased"}
+            </p>
+
+            <button
+              onClick={getRecs}
+              disabled={loading || !profile.goals.length}
+              className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all ${
+                profile.goals.length ? "bg-primary text-white shadow-soft hover:bg-primary-dark active:scale-95" : "bg-green-100 text-muted cursor-not-allowed"
+              }`}
+            >
+              {loading
+                ? <span className="flex items-center justify-center gap-2"><span className="spinner" /> Finding your recommendations...</span>
+                : "Get Recommendations / おすすめを見る"
+              }
+            </button>
+            {error && <p className="text-xs text-accent text-center mt-2">{error}</p>}
+          </div>
+
+          {/* Recommendations */}
+          {recs && (
+            <div className="space-y-3 anim-fadeInUp">
+              <h3 className="font-display font-bold text-text-main text-base px-1">Your Recommendations</h3>
+
+              {recs.recs.map((rec, i) => {
+                const prod = JAPAN_CATALOG.find(p => p.id === rec.id);
+                if (!prod) return null;
+                return (
+                  <div key={i} className="bg-white rounded-3xl shadow-card p-4 flex items-start gap-3">
+                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background:prod.bg }}>
+                      <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"22px" }}>{prod.icon}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted font-semibold">{prod.brand}</p>
+                          <p className="font-bold text-sm text-text-main leading-snug">{prod.name}</p>
+                          <p className="text-primary font-bold">{prod.price}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xl font-black text-primary leading-none">{rec.matchScore}%</p>
+                          <p className="text-xs text-muted">match</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted mt-1.5 leading-relaxed">{rec.reason}</p>
+                      <div className="flex gap-1.5 mt-2 flex-wrap">
+                        <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">{STRATEGY_LABEL[rec.strategy] || rec.strategy}</span>
+                        <span className="text-xs bg-green-50 text-primary px-2 py-0.5 rounded-full border border-green-100">Confidence: {rec.confidence}%</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Ask Anything in profile mode */}
+              <div className="bg-white rounded-3xl p-5 shadow-card">
+                <p className="font-bold text-text-main text-sm flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined icon-filled text-primary" style={{ fontSize:"20px" }}>chat</span>
+                  Ask Anything / 何でも聞く
+                </p>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    value={askQ}
+                    onChange={e => setAskQ(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleAsk()}
+                    placeholder="Ask about your recommendations..."
+                    className="flex-1 border border-green-200 rounded-xl px-3 py-2 text-sm focus:border-primary transition-colors"
+                  />
+                  <button
+                    onClick={handleAsk}
+                    disabled={askLoading || !askQ.trim()}
+                    className="bg-primary text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
+                  >
+                    {askLoading ? <span className="spinner" /> : "Ask"}
+                  </button>
+                </div>
+                {!askA && (
+                  <div className="flex flex-wrap gap-2">
+                    {["Can I take all 4 together?","Which is most important?","Best time to take each?"].map(q => (
+                      <button key={q} onClick={() => setAskQ(q)} className="text-xs bg-green-50 text-primary px-2.5 py-1.5 rounded-full hover:bg-primary-light transition-colors border border-green-100">
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {askA && (
+                  <div className="mt-2 p-3 bg-green-50 rounded-xl anim-fadeInUp border border-green-100">
+                    <p className="text-sm text-text-main leading-relaxed">{askA}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  APP ROOT
+  // ═══════════════════════════════════════════════════════════════
+  function AppShell() {
+    const [apiKey, setApiKey]               = useState("");
+    const [onboardingGoals, setOGoals]      = useState([]);
+    const navigate                          = useNavigate();
+    const location                          = useLocation();
+
+    // Derive active tab from route
+    const activeMode = location.pathname.startsWith("/chat")    ? "chat"
+                     : location.pathname.startsWith("/profile") ? "profile"
+                     : "onboarding";
+
+    const handleMode = mode => {
+      if (mode === "onboarding") navigate("/");
+      else if (mode === "chat")  navigate("/chat");
+      else                       navigate("/profile");
+    };
+
+    // Capture goals when navigating to results so Profile can pre-fill
+    useEffect(() => {
+      if (location.pathname === "/results" && location.state?.goals?.length) {
+        setOGoals(location.state.goals);
+      }
+    }, [location]);
+
+    return (
+      <div className="min-h-screen bg-bg">
+        <ApiKeyBanner apiKey={apiKey} onSave={setApiKey} />
+        <div className="pt-10">
+          <TopNav activeMode={activeMode} onMode={handleMode} />
+          <Routes>
+            <Route path="/"        element={<WelcomeScreen />} />
+            <Route path="/intake"  element={<IntakeScreen />} />
+            <Route path="/thinking"element={<ThinkingScreen apiKey={apiKey} />} />
+            <Route path="/results" element={<ResultsScreen apiKey={apiKey} />} />
+            <Route path="/chat"    element={<ConversationalMode apiKey={apiKey} />} />
+            <Route path="/profile" element={<ProfileMode apiKey={apiKey} prefillGoals={onboardingGoals} />} />
+          </Routes>
+        </div>
+      </div>
+    );
+  }
+
+  function App() {
+    return (
+      <MemoryRouter>
+        <AppShell />
+      </MemoryRouter>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
