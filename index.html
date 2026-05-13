@@ -118,8 +118,12 @@
   // ═══════════════════════════════════════════════════════════════
   //  CONSTANTS
   // ═══════════════════════════════════════════════════════════════
-  const MODEL   = "claude-haiku-4-5-20251001";
-  const API_URL = "https://api.anthropic.com/v1/messages";
+  const MODEL      = "claude-haiku-4-5-20251001";
+  const API_URL    = "https://api.anthropic.com/v1/messages";
+  const PROXY_URL  = "/api/claude";
+  // Use server-side proxy when deployed to Netlify (no key needed in browser)
+  const USE_PROXY  = window.location.hostname.endsWith(".netlify.app") ||
+                     window.location.hostname.endsWith(".netlify.com");
 
   const JAPAN_CATALOG = [
     { id:"gold-c",         brand:"California Gold Nutrition", name:"Gold C, Vitamin C 1,000 mg",      price:"¥750",   icon:"brightness_high",        goals:["immunity","skin","energy"],     tag:"✨ Antioxidant / 抗酸化",      bg:"#FFF3E0" },
@@ -168,6 +172,20 @@
   //  API LAYER
   // ═══════════════════════════════════════════════════════════════
   async function callClaude(apiKey, system, messages, maxTokens=900) {
+    const payload = JSON.stringify({ model:MODEL, max_tokens:maxTokens, system, messages });
+
+    // On Netlify: route through server-side proxy — API key never touches the browser
+    if (USE_PROXY) {
+      const res = await fetch(PROXY_URL, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: payload,
+      });
+      if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message||`API ${res.status}`); }
+      return (await res.json()).content[0].text;
+    }
+
+    // Local / GitHub Pages: use key entered by user
     const res = await fetch(API_URL, {
       method:"POST",
       headers:{
@@ -176,7 +194,7 @@
         "anthropic-version":"2023-06-01",
         "anthropic-dangerous-direct-browser-access":"true",
       },
-      body: JSON.stringify({ model:MODEL, max_tokens:maxTokens, system, messages }),
+      body: payload,
     });
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message||`API ${res.status}`); }
     return (await res.json()).content[0].text;
